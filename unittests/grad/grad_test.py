@@ -1,5 +1,9 @@
+import sys
+import os
+sys.path.append("../../") # Adds higher directory to python modules path.
+
 # Import all required modules
-from modules import *
+from unittests.modules import *
 #----------------------------------------------------------------------------------#
 # Give the name of the INI file
 inifile = "grad.ini"

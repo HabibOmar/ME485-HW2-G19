@@ -119,7 +119,7 @@ class ParabolicIntInters(BaseIntInters):
             for idx in range(i_begin, i_end):
             #*************************# 
             # Complete function
-            
+                pass
 
             #*************************# 
 
@@ -222,7 +222,7 @@ class ParabolicBCInters(BaseBCInters):
             for idx in range(i_begin, i_end):
                 #*************************# 
                 # Complete function
-            
+                    pass
 
                 #*************************# 
                 
@@ -249,7 +249,7 @@ class ParabolicBCInters(BaseBCInters):
             for idx in range(i_begin, i_end):
                #*************************# 
                # Complete function
-            
+                pass
 
                #*************************# 
 

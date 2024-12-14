@@ -105,6 +105,10 @@ class ParabolicElements(BaseElements, ParabolicFluidElements):
     def _make_compute_norm(self):
         #*************************# 
         # get required data here
+        vol = self._vol
+        grad = self._grad
+
+
 
 
 
@@ -116,7 +120,7 @@ class ParabolicElements(BaseElements, ParabolicFluidElements):
         # upts is the solution field
 
 
-
+            norm  = 0.0
 
         #*************************# 
 
@@ -132,10 +136,10 @@ class ParabolicElements(BaseElements, ParabolicFluidElements):
         def _compute_fpts(i_begin, i_end, upts, fpts):
         #*************************# 
         # Complete function
-        # upts: array holding cell center values
-        # fpts: array holding face values
-
-
+        # upts: array holding cell center values shape (nvars, neles)
+        # fpts: array holding face values shape (nface, nvars, neles)
+        # Broadcast cell center values to face values
+            fpts[:, :, :] = upts[np.newaxis, :, :] 
 
 
         #*************************# 
@@ -153,7 +157,8 @@ class ParabolicElements(BaseElements, ParabolicFluidElements):
         # Complete function
         # grad: array holding cell center gradient values
         # fpts: array holding face values
-
+            
+            pass
         #*************************# 
 
 
