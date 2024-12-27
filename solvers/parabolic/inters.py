@@ -65,10 +65,9 @@ class ParabolicIntInters(BaseIntInters):
         ndims, nfvars = self.ndims, self.nfvars
         lt, le, lf = self._lidx
         rt, re, rf = self._ridx
-        nf, sf = self._vec_snorm, self._mag_snorm
-
+        nf, sf = self._vec_snorm, self._mag_snorm  # nf.shape (ndims, nfpts), sf.shape (nfpts, )
         # Inverse distance between the elements
-        inv_ef    = self._rcp_dx
+        inv_ef    = self._rcp_dx  # inv_ef.shape (nfpts, )
         
         # Unit vector connecting cell centers 
         ef = self._dx_adj * inv_ef
@@ -84,16 +83,62 @@ class ParabolicIntInters(BaseIntInters):
 
         def comm_flux(i_begin, i_end, muf, gradf, *uf):
             # Parse element views (fpts, grad)
-            du    = uf[:nele]
+            du = uf[:nele]
+
             for idx in range(i_begin, i_end):
                 #*************************# 
                 # Complete function
-            
 
-                #*************************# 
+                lti, lfi, lei = lt[idx], lf[idx], le[idx]
+                rti, rfi, rei = rt[idx], rf[idx], re[idx]
+
+                # Compute viscosity
+                muf[idx] = compute_mu(idx)  # Constant viscosity "Diffusion Coefficient"
+
+
+                # Face area and unit normal vector
+                S_f = sf[idx]
+                n_f = nf[:, idx]
+
+                # Unit vector along connecting line between cell centers and inverse distance
+                e_f = ef[:, idx]
+                inv_e_f = inv_ef[idx]
+
+                fn = np.zeros(nfvars)
+
+                for jdx in range(nfvars):
+
+                    grad_face = gradf[:, jdx, idx] # Gradients at face
+                    dui = du[lti][lfi, jdx, lei]  # difference q_r - q_l
+
+
+                    # Minimum correction:    E_f = (e·S_f) e = (S_f * (e·n_f)) e
+                    # Orthogonal correction: E_f = S_f · e
+                    # Over-relaxed:          E_f = ((S_f)/(e·n_f)) e
+
+                    S_f_vec = S_f * n_f 
+
+                    if correction == 'minimum':
+                        E_f = S_f * (np.dot(e_f, n_f)) * e_f  # = S_f(e_f·n_f) e_f
+
+                    elif correction == 'orthogonal':
+                        E_f = S_f * e_f # = S_f·e
+ 
+                    elif correction == 'over_relaxed':
+                        E_f = (S_f/np.dot(e_f, n_f)) * e_f   # = (S_f/(e·n_f)) e_f
+                        
+                    # non-orthogonal like contribution: T_f = S_f - E_f ;  ∇ϕ_f · T_f
+                    T_f = S_f_vec - E_f
+                    grad_T_f = np.dot(grad_face, T_f)
+
+                    #orthogonal like contribution: ||E_f|| * ϕc - ϕf / dcf
+                    E_f_mag = np.linalg.norm(E_f)
+                    grad_E_f = E_f_mag * (dui*inv_e_f)                    
+
                 
-
-
+                    # Diffusion flux with correction: F = -mu (grad_T_f + grad_E_f)
+                    fn[jdx] = -muf[idx] * (grad_T_f + grad_E_f)
+                #*************************#              
 
                     uf[lti][lfi, jdx, lei] =  fn[jdx]
                     uf[rti][rfi, jdx, rei] = -fn[jdx]
@@ -107,20 +152,35 @@ class ParabolicIntInters(BaseIntInters):
         lt, le, lf = self._lidx
         rt, re, rf = self._ridx    
         # Inverse distance between the cell center
-        weight    = self._weight
+        weight    = self._weight # weight.shape (nfpts, )
         # Stack-allocated array
         array = self.be.local_array()
 
-        def grad_at(i_begin, i_end, gradf, *uf):
+        def grad_at(i_begin, i_end, gradf, *uf):  #gradf.shape (ndims, nvars, nfpts)
             # Parse element views (fpts, grad)
-            du    = uf[:nele]
-            gradu = uf[nele:]
+            du    = uf[:nele]  # shape (nele, nvars, nface)
+            gradu = uf[nele:]  # shape (ndims, nvars, nele)
 
             for idx in range(i_begin, i_end):
-            #*************************# 
+            #*************************#  
             # Complete function
-                pass
+                lti, lei = lt[idx], le[idx]
+                rti, rei = rt[idx], re[idx]
 
+                # Weight for gradient averaging
+                w = weight[idx]
+                # print(w)
+                w_l = w
+                w_r = 1.0 - w_l
+
+            # Weighted average o grfadients:
+            # (∇q)_face = w_l*(∇q)_left + w-*(∇q)_right
+                for jdx in range(nvars):
+                    for kdx in range(ndims):
+                        gl = gradu[lti][kdx, jdx, lei]
+                        gr = gradu[rti][kdx, jdx, rei]
+                        grad_face = w_l*gl +  w_r*gr
+                        gradf[kdx, jdx, idx] = grad_face            
             #*************************# 
 
         return self.be.make_loop(self.nfpts, grad_at)
@@ -162,7 +222,7 @@ class ParabolicBCInters(BaseBCInters):
 
         bcc['ndims'], bcc['nvars'], bcc['nfvars'] = self.ndims, self.nvars, self.nfvars
 
-
+        
 
         bcc.update(self._const)
         
@@ -208,11 +268,13 @@ class ParabolicBCInters(BaseBCInters):
         # avec = self._vec_snorm/np.einsum('ij,ij->j', ef, self._vec_snorm)
 
         correction = self._correction
+
         # Compiler arguments
         array = self.be.local_array()
        
         # Get compiled function of viscosity and viscous flux
         compute_mu = self.ele0.mu_container()
+
         # Get bc function 
         bc = self.bc
 
@@ -222,7 +284,58 @@ class ParabolicBCInters(BaseBCInters):
             for idx in range(i_begin, i_end):
                 #*************************# 
                 # Complete function
-                    pass
+
+                lti, lfi, lei = lt[idx], lf[idx], le[idx]
+
+                # Compute viscosity
+                muf[idx] = compute_mu(idx)  # Constant viscosity "Diffusion Coefficient"
+
+
+                # Face area and unit normal vector
+                S_f = sf[idx]
+                n_f = nf[:, idx]
+
+                # Unit vector along connecting line between cell centers and inverse distance
+                e_f = ef[:, idx]
+                inv_e_f = inv_ef[idx]
+
+                fn = np.zeros(nfvars)
+
+                for jdx in range(nfvars):
+
+                    grad_face = gradf[:, jdx, idx] # Gradients at face
+                    dui = du[lti][lfi, jdx, lei]  # difference q_r - q_l
+
+
+                    # Minimum correction:    E_f = (e·S_f) e = (S_f * (e·n_f)) e
+                    # Orthogonal correction: E_f = S_f · e
+                    # Over-relaxed:          E_f = ((S_f)/(e·n_f)) e
+
+                    S_f_vec = S_f * n_f 
+
+                    if correction == 'minimum':
+                        E_f = S_f * (np.dot(e_f, n_f)) * e_f  # = S_f(e·n_f) e_f
+
+                    elif correction == 'orthogonal':
+                        E_f = S_f * e_f # = S_f·e
+ 
+                    elif correction == 'over_relaxed':
+                        E_f = (S_f/np.dot(e_f, n_f)) * e_f   # = (S_f/(e·n_f)) e_f
+                        
+                    # non-orthogonal like contribution: T_f = S_f - E_f ;  ∇ϕ_f · T_f
+                    T_f = S_f_vec - E_f
+                    grad_T_f = np.dot(grad_face, T_f)
+
+                    #orthogonal like contribution: ||E_f|| * ϕc - ϕf / dcf
+                    E_f_mag = np.linalg.norm(E_f)
+                    grad_E_f = E_f_mag * (dui*inv_e_f)                    
+
+                
+                    # Diffusion flux with correction: F = -mu (grad_T_f + grad_E_f)
+                    fn[jdx] = -muf[idx] * (grad_T_f + grad_E_f)
+                    
+                    # Assigning
+                    uf[lti][lfi, jdx, lei] =  fn[jdx]
 
                 #*************************# 
                 
@@ -249,8 +362,12 @@ class ParabolicBCInters(BaseBCInters):
             for idx in range(i_begin, i_end):
                #*************************# 
                # Complete function
-                pass
+                lti, lfi, lei = lt[idx], lf[idx], le[idx]
 
+                for jdx in range(nvars):
+                    for kdx in range(ndims):
+                        d_u = du[lti][lfi, jdx, lei]
+                        gradf[kdx, jdx, idx] = d_u*inv_tf[idx]*avec[kdx, idx]
                #*************************# 
 
         return self.be.make_loop(self.nfpts, grad_at)

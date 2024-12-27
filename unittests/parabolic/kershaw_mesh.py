@@ -4,7 +4,7 @@ import math
 
 # Before using any functions in the Python API, Gmsh must be initialized:
 gmsh.initialize(sys.argv)
-alpha = 0.40
+alpha = 0.85
 
 
 
@@ -162,7 +162,7 @@ gmsh.model.addPhysicalGroup(2, [s1, s2, s3, s4, s5,s6,s7,s8],13 , name="fluid")
 
 # Save it to disk
 gmsh.model.mesh.generate(2)
-gmsh.write("parabolic.msh")
+gmsh.write("parabolic1.msh")
 # Launch the GUI to see the results:
 if '-nopopup' not in sys.argv:
     gmsh.fltk.run()

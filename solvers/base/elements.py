@@ -268,8 +268,7 @@ class BaseElements:
 
         # Solve Ax=b
         op = np.linalg.solve(np.rollaxis(A, axis=2), np.rollaxis(b, axis=2)).transpose(1,2,0)
-
-        return op
+        return op  # shape (ndims, nface, neles)
 
     @property
     @fc.lru_cache()

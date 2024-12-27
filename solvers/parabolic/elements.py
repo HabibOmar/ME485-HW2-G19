@@ -105,23 +105,27 @@ class ParabolicElements(BaseElements, ParabolicFluidElements):
     def _make_compute_norm(self):
         #*************************# 
         # get required data here
+        nvars, neles = self.nvars, self.neles
+        xc = self.xc # Element center coordinates shape (neles, ndims)
+
         vol = self._vol
-        grad = self._grad
-
-
-
-
-
 
         #*************************# 
         def run(upts):
         #*************************# 
         # compute L2 norm in this function
         # upts is the solution field
-
-
-            norm  = 0.0
-
+            norm  = 0.0 # initialize norm accumulator
+            for idx in range(neles):
+                vol_i = vol[idx]
+                # x_i = xc[idx, 0]
+                # y_i = xc[idx, 1]
+                for kdx in range(nvars):
+                    # exact = np.sqrt(x_i**2 + y_i**2)
+                    exact = 0.0
+                    calc = upts[kdx, idx]
+                    norm += vol_i*(exact - calc)**2
+            norm = np.sqrt(norm)
         #*************************# 
 
             return norm
@@ -131,7 +135,7 @@ class ParabolicElements(BaseElements, ParabolicFluidElements):
 #-------------------------------------------------------------------------------#
     def _make_compute_fpts(self):
         #*************************# 
-        # get required data here
+        nVars, nFace = self.nvars, self.nface
         #*************************# 
         def _compute_fpts(i_begin, i_end, upts, fpts):
         #*************************# 
@@ -139,7 +143,10 @@ class ParabolicElements(BaseElements, ParabolicFluidElements):
         # upts: array holding cell center values shape (nvars, neles)
         # fpts: array holding face values shape (nface, nvars, neles)
         # Broadcast cell center values to face values
-            fpts[:, :, :] = upts[np.newaxis, :, :] 
+            for idx in range(i_begin, i_end):
+                for jdx in range(nFace):
+                    for kdx in range(nVars):
+                        fpts[jdx, kdx, idx] = upts[kdx, idx] 
 
 
         #*************************# 
@@ -150,6 +157,8 @@ class ParabolicElements(BaseElements, ParabolicFluidElements):
 #-------------------------------------------------------------------------------#
     def _make_grad(self):
         nface, ndims, nvars = self.nface, self.ndims, self.nvars
+        neles = self.neles
+
         # Gradient operator 
         op = self._prelsq
         def _cal_grad(i_begin, i_end, fpts, grad):
@@ -158,7 +167,13 @@ class ParabolicElements(BaseElements, ParabolicFluidElements):
         # grad: array holding cell center gradient values
         # fpts: array holding face values
             
-            pass
+            for idx in range(i_begin, i_end):
+                for kdx in range(nvars):
+                    for ddx in range(ndims):
+                        grad[ddx, kdx, idx] = 0.0
+                        for jdx in range(nface):
+                            grad[ddx, kdx, idx] += op[ddx, jdx, idx]*fpts[jdx, kdx, idx]
+
         #*************************# 
 
 
