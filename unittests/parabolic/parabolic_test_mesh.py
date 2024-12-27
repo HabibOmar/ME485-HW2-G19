@@ -106,7 +106,7 @@ gmsh.model.addPhysicalGroup(2, [s1, s2, s3, s4, s5],13 , name="fluid")
 
 # Save it to disk
 gmsh.model.mesh.generate(2)
-gmsh.write("parabolic2.msh")
+gmsh.write("parabolic.msh")
 # Launch the GUI to see the results:
 if '-nopopup' not in sys.argv:
     gmsh.fltk.run()
